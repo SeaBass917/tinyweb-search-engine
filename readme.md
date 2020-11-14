@@ -5,9 +5,7 @@ Toy project for exploring the linear algebraic concepts behind search engines
 # Includes:
 - Web-Spider that grabs a bunch of wikipedia pages 
     (Can be extended to other websites)
-- Basic TF-IDF indexer for web-pages
-
-Each page index contains:
+- Basic TF-IDF indexer for web-pages. Each page index contains:
     - Url to page online
     - List of links on the page
     - Term frequencies
