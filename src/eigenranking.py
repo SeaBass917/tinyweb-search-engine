@@ -1,6 +1,7 @@
 from json import loads as json_loads
 from scipy.sparse import dok_matrix
-from numpy import float32
+# from scipy.sparse.linalg import eigs
+import numpy as np
 import os
 
 def determineEigenRankings(indexDir: str):
@@ -62,12 +63,13 @@ def determineEigenRankings(indexDir: str):
     l_min = 2**32 - 1
     l_max = 0
     l_avg = 0
+    nnn = 0
     for url in keyset:
         l = len(linkMap[url])
         l_min = min(l_min, l)
         l_max = max(l_max, l)
         l_avg += l
-
+    
     print("Stats on links in the mini-web:")
     print(f"\tmin: {l_min}")
     print(f"\tmax: {l_max}")
@@ -77,7 +79,7 @@ def determineEigenRankings(indexDir: str):
     enumLookup = {url: i for i, url in enumerate(keyset)}
 
     # Populate the sparse matrix with a uniform probability of going to each page
-    matSparse = dok_matrix((numPages, numPages), dtype=float32)
+    matSparse = dok_matrix((numPages, numPages), dtype=np.float64)
     for url, links in linkMap.items():
         i = enumLookup[url]
         p = 1.0 / len(links)
@@ -91,20 +93,28 @@ def determineEigenRankings(indexDir: str):
 
     # Initialize a uniform probability vector
     p = 1.0 / numPages
-    v = [[p] for _ in range(numPages)]
+    v = np.ones((numPages, 1), dtype=np.float64) * p
     
     # Run the vector through enough cycles until convergence on eigenvector
     epsilon = 1.0
     n = 0
-    while 1e-8 < epsilon and n < 2000:
+    while 1e-6 < epsilon and n < 20000:
         vnew = matSparse * v
 
+        # check difference between vectors for convergence
         epsilon = 0
         for i in range(numPages):
             epsilon += abs(v[i][0] - vnew[i][0])
             
         v = vnew
         n+=1
+
+    ## DEV STUFF
+    # Check that v is an eigenvector that sums to 1
+    s = 0
+    for p in v:
+        s += p[0]
+    print(f"\tEigenvector sums to {s}")
 
     # ==================
     # Step 4) Rank Urls
@@ -118,7 +128,6 @@ def determineEigenRankings(indexDir: str):
     eigenRankings.sort(key=lambda x: x[0], reverse=True)
 
     return eigenRankings
-
 
 if __name__ == "__main__":
 

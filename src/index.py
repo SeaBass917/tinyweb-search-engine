@@ -22,7 +22,7 @@ from nltk.tokenize.destructive import NLTKWordTokenizer
 from time import time
 
 import os
-from htmlparse import Host, getSoupLocal, getLinksFromSoup, WIKI_HOST_URL
+from htmlparse import Host, getSoupLocal, getLinksFromSoup, WIKI_HOST_URL, SOF_HOST_URL
 from json import dumps as json_dumps
 
 ## === ##
@@ -133,9 +133,16 @@ if __name__ == "__main__":
 
                     # Determine the weburl from the name
                     webUrl = ""
-                    if pagename.startswith("wiki"):
+                    if pagename.startswith("wiki"): # wikipedia-title_of_article
                         webUrl = f"{WIKI_HOST_URL}/wiki/{pagename[len('wikipedia-'):]}"
                         host = Host.WP
+                    elif pagename.startswith("stackover"):  # stackoverflow-12345123-title-of-question-asdw
+                        pageidntitle = pagename[len('stackoverflow-'):]
+                        ii = pageidntitle.find('-')
+                        pageid = pageidntitle[:ii]
+                        pagetitle = pageidntitle[ii+1:]
+                        webUrl = f"{SOF_HOST_URL}/questions/{pageid}/{pagetitle}"
+                        host = Host.SOF
                     else:
                         print(f"\tERROR! No way to determine url for page: \"{pagename}\".")
                         raise NotImplementedError

@@ -53,8 +53,9 @@ def webpageDFS(url: str, host: Host, localWebDir: str, delay=3.0):
 
 if __name__ == "__main__":
     
-    host = "https://en.wikipedia.org"
-    seedURL = "https://en.wikipedia.org/wiki/Linear_algebra"
+    # seedURL = "https://en.wikipedia.org/wiki/Linear_algebra"
+    seedURL = "https://stackoverflow.com/questions/45380417/optimizing-a-webcrawl"
     localWebDir = "tinyweb/"
 
-    webpageDFS(seedURL, Host.WP, localWebDir)
+    # webpageDFS(seedURL, Host.WP, localWebDir)
+    webpageDFS(seedURL, Host.SOF, localWebDir)
