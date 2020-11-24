@@ -20,6 +20,7 @@ def determineEigenRankings(indexDir: str):
     # =============================
     # Step 1) Read Index Directory
     # =============================
+    print("Reading The Index...")
 
     # Loop through the index files and build a map
     # url -> links
@@ -51,12 +52,7 @@ def determineEigenRankings(indexDir: str):
     # ===============================
     # Step 2) Populate spares matrix
     # ===============================
-
-    # Trim off the links we dont have in our index
-    keyset = set(linkMap.keys())
-    numPages = len(keyset)
-    for url in keyset:
-        linkMap[url] = set(linkMap[url]).intersection(keyset)
+    print("Populating Sparse Matrix...")
     
     ## DEV STUFF
     # Show stats on the links
@@ -96,6 +92,7 @@ def determineEigenRankings(indexDir: str):
     v = np.ones((numPages, 1), dtype=np.float64) * p
     
     # Run the vector through enough cycles until convergence on eigenvector
+    print("Determining eigenvector...")
     epsilon = 1.0
     n = 0
     while 1e-6 < epsilon and n < 20000:
@@ -119,6 +116,7 @@ def determineEigenRankings(indexDir: str):
     # ==================
     # Step 4) Rank Urls
     # ==================
+    print("Ranking Pages...")
 
     # Create an inverse map
     urlLookup = {i: url for url, i in enumLookup.items()}
@@ -132,7 +130,7 @@ def determineEigenRankings(indexDir: str):
 if __name__ == "__main__":
 
     indexDir = "index/"
-    eigenRankPath = "eigenranking.txt"
+    eigenRankPath = f"{indexDir}/eigenranking.txt"
     
     if os.path.exists(indexDir):
         eRanks = determineEigenRankings(indexDir)

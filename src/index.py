@@ -1,166 +1,90 @@
 # ====================================================================
+# Creates or updates a map of the connections from each page 
+# to the rest of the pages
 #
-# Builds an index based on our local mini-web
-# This index will be a directory of JSONs
-# Each JSON will represent a website and contain
-#   - URL to the website
-#   - URLs that the website links to in a list
-#   - Term frequency of each word in the <title>
-#   - Term frequency of each word in the <h*>
-#   - Term frequency of each word in the <p>
-#   - Number of terms in *title*
-#   - Number of terms in *headers*
-#   - Number of terms in *p-tags*
-#
-# NOTE: All terms stored will be lemmatized
-# 
-from nltk import download as nltk_download
-from nltk import RegexpTokenizer
-from nltk.stem import WordNetLemmatizer
-from nltk.data import load
-from nltk.tokenize.destructive import NLTKWordTokenizer
-from time import time
+# Stored in JSON format, keyed by url
+# {
+#     url0: [url1, url14, url52, ...],
+#     url1: [url1, url3, url22, ...],
+#     ...
+# }
+#  
+from time import time, sleep
 
 import os
-from htmlparse import Host, getSoupLocal, getLinksFromSoup, WIKI_HOST_URL, SOF_HOST_URL
+from htmlparse import Host, getSoupLocal, getLinksFromSoup, getURLAndHostFromFileName, WIKI_HOST_URL, SOF_HOST_URL, MEWE_HOST_URL
 from json import dumps as json_dumps
+from json import loads as json_loads
 
-## === ##
-#  NLP  #
-## === ##
+def updateWebIndex(htmlPages: list, index: dict):
 
-# Language models needed
-nltk_download('wordnet')
-_lemmatizer = WordNetLemmatizer()
-_tokenizer = RegexpTokenizer(r"\w+|\d+")
+    # Fill index for each url
+    for htmlPage in htmlPages:
 
-def tokenize(text: str):
-    return _tokenizer.tokenize(text)
+        # Filename will be the same in the index, only .json 
+        if htmlPage.endswith(".html"):
+            pagename = htmlPage[:-5]
+            htmlPath = f"{localWebDir}/{htmlPage}"
 
-def lemmatize(word: str):
-    return _lemmatizer.lemmatize(word)
+            # Determine the weburl from the name
+            url, host = getURLAndHostFromFileName(pagename)
 
-def getLemmas(text: str):
-    return [lemmatize(word) for word in tokenize(text)]
+            if url not in index.keys():
+                print(f"[Index] Adding \"{htmlPage}\"") 
 
-def getTermFreq(text: str, tfExt=None):
+                # Get the links from the page
+                soup = getSoupLocal(htmlPath)
+                links = getLinksFromSoup(soup, host)
+                index[url] = links
 
-    lemmas = getLemmas(text)
-
-    tf = tfExt if tfExt else {}
-    for lemma in lemmas:
-        if lemma in tf.keys():
-            tf[lemma] += 1
         else:
-            tf[lemma] = 1
+            print(f"Skipping non-html file: \"{htmlPage}\"")
 
-    return tf
-
-## ==== ##
-#  Misc  #
-## ==== ##
-
-def generateIndexFromPage(htmlPath: str, webUrl: str, host: Host):
-
-    soup = getSoupLocal(htmlPath)
-
-    # Determine the links on the page
-    # Convert to a list for the JSON
-    links = list(getLinksFromSoup(soup, host))
-
-    # Title term freq
-    title = soup.title.string if soup.title else ""
-    titleTF = getTermFreq(title)
-
-    headers = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-    headerTF = {}
-    for header in headers:
-        if header.text:
-            headerTF = getTermFreq(header.text, headerTF)
-
-    texts = soup.find_all('p')
-    textTF = {}
-    for text in texts:
-        if text.text:
-            textTF = getTermFreq(text.text, textTF)
-
-    numTitleLemmas = 0
-    for count in titleTF.values():
-        numTitleLemmas += count
-    numHeaderLemmas = 0
-    for count in headerTF.values():
-        numHeaderLemmas += count
-    numTextLemmas = 0
-    for count in textTF.values():
-        numTextLemmas += count
-
-    # Compile  and return the index JSON
-    index = {
-        "url": webUrl,
-        "links": links,
-        "title-tf": titleTF,
-        "header-tf": headerTF,
-        "text-tf": textTF,
-        "numTitleLemmas": numTitleLemmas,
-        "numHeaderLemmas": numHeaderLemmas,
-        "numTextLemmas": numTextLemmas,
-    }
-
-    return index
+    # Remove links that arent in the tiny-web
+    urls = set(index.keys())
+    for url in urls:
+        index[url] = list(set(index[url]).intersection(urls))
 
 if __name__ == "__main__":
     
     localWebDir = "tinyweb/"
     indexDir = "index/"
+    indexPath = f"{indexDir}/index.json"
+    pollingRate = 10
 
-    # Make the index directory if this is the first time
-    if not os.path.exists(indexDir): os.makedirs(indexDir)
-    
-    # Loop through the local web pages
-    # If the page does not have an index file, then make one, and save it
-    if os.path.exists(localWebDir):
-        htmlPages = os.listdir(localWebDir)
-        numPages = len(htmlPages)
-        if 0 < len(htmlPages):
-            for n, htmlPage in enumerate(htmlPages):
-                print(f"({n+1}/{numPages}) {htmlPage}")
+    # Initialize index (read off file is file is there)
+    index = {}
+    if os.path.exists(indexPath):
+        with open(indexPath, mode='r') as fp:
+            index = json_loads(fp.read())
 
-                # Filename will be the same in the index, only .json 
-                if htmlPage.endswith(".html"):
-                    pagename = htmlPage[:-5]
-                    htmlPath = f"{localWebDir}/{htmlPage}"
-                    jsonPath = f"{indexDir}/{pagename}.json"
+    # Run every pollingRate seconds,
+    # check for updates to the tinyweb
+    # If new files present, update the index
+    htmlPagesPrev = set()
+    while True:
+        print("[Index] Tick.")
+        if os.path.exists(indexDir):
+            if os.path.exists(localWebDir):
 
-                    # Determine the weburl from the name
-                    webUrl = ""
-                    if pagename.startswith("wiki"): # wikipedia-title_of_article
-                        webUrl = f"{WIKI_HOST_URL}/wiki/{pagename[len('wikipedia-'):]}"
-                        host = Host.WP
-                    elif pagename.startswith("stackover"):  # stackoverflow-12345123-title-of-question-asdw
-                        pageidntitle = pagename[len('stackoverflow-'):]
-                        ii = pageidntitle.find('-')
-                        pageid = pageidntitle[:ii]
-                        pagetitle = pageidntitle[ii+1:]
-                        webUrl = f"{SOF_HOST_URL}/questions/{pageid}/{pagetitle}"
-                        host = Host.SOF
-                    else:
-                        print(f"\tERROR! No way to determine url for page: \"{pagename}\".")
-                        raise NotImplementedError
+                # Check for changes 
+                htmlPages = set(os.listdir(localWebDir))
+                if 0 < len(htmlPages.intersection(htmlPagesPrev)):
+                    print("[Index] Changes to web.")
+                    updateWebIndex(htmlPages, index)
 
-                    # If the index file is missing or is empty generate one
-                    if not os.path.exists(jsonPath):
-                        pageIndex = generateIndexFromPage(htmlPath, webUrl, host)
+                # Save the index information 
+                with open(indexPath, mode='w') as fp:
+                    fp.write(json_dumps(index))
 
-                        # Save the index information 
-                        with open(jsonPath, mode='w') as fp:
-                            fp.write(json_dumps(pageIndex))
-                    
-                else:
-                    print(f"Skipping non-html file: \"{htmlPage}\"")
+                htmlPagesPrev = htmlPages
 
+                sleep(pollingRate)
+
+            else:
+                print(f"[Index]\tERROR! Cannot see local web directory: \"{localWebDir}\".")
+                break
         else:
-            print(f"\tWarning! Local web directory: \"{localWebDir}\" is empty.")
-
-    else:
-        print(f"\tERROR! Cannot see local web directory: \"{localWebDir}\".")
+            print(f"[Index]\tERROR! Cannot reach output index/ directory: \"{localWebDir}\".")
+            break
     

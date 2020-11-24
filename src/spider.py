@@ -7,6 +7,8 @@
 #                            then stop due to python recursion limits
 #
 import os
+import argparse
+from random import randint
 
 from htmlparse import Host, getSoup, getSoupLocal, getLinksFromSoup, getPageNameFromURL, getFileNameFromPageName
 
@@ -30,32 +32,54 @@ def webpageDFS(url: str, host: Host, localWebDir: str, delay=3.0):
     localPath = f"{localWebDir}/{getFileNameFromPageName(pageName, host)}"
     if not os.path.exists(localPath): 
         soup, html = getSoup(url, delay)
-        with open(localPath, mode="wb") as fp:
-            fp.write(html)
+        if html:
+            with open(localPath, mode="wb") as fp:
+                fp.write(html)
+        else:
+            return
     else:
         soup = getSoupLocal(localPath)
         if soup.head == None:   # Invalid HTML file save (happens if interupted during write)
             soup, html = getSoup(url, delay)
-            with open(localPath, mode="wb") as fp:
-                fp.write(html)
+            if html:
+                with open(localPath, mode="wb") as fp:
+                    fp.write(html)
+            else:
+                return
 
 
     # Get all the links from the page
     # If the link is valid then recursively call this function
     linkSet = getLinksFromSoup(soup, host)
 
+    noLinksFound = True
     for linkPath in linkSet:
         # Check to see if this is a new page
         pageName_i = getPageNameFromURL(linkPath, host)
         localPath_i = f"{localWebDir}/{getFileNameFromPageName(pageName_i, host)}"
         if not os.path.exists(localPath_i):
+            noLinksFound = False
             webpageDFS(linkPath, host, localWebDir)
 
-if __name__ == "__main__":
-    
-    # seedURL = "https://en.wikipedia.org/wiki/Linear_algebra"
-    seedURL = "https://stackoverflow.com/questions/45380417/optimizing-a-webcrawl"
-    localWebDir = "tinyweb/"
+    # All links on this page have been visited, recurse at random then
+    if noLinksFound:
+        irand = randint(0, len(linkSet) - 1)
+        webpageDFS(list(linkSet)[irand], host, localWebDir)
 
-    # webpageDFS(seedURL, Host.WP, localWebDir)
-    webpageDFS(seedURL, Host.SOF, localWebDir)
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--siteCode", help="Website seed code", type=str, choices=["WP", "SOF", "MW"], required=True)
+    parser.add_argument("-o", "--localWebDir", help="Directory to save html files", type=str, required=True)
+    args = parser.parse_args()
+
+    siteCode = args.siteCode
+    localWebDir = args.localWebDir
+
+    if siteCode == "WP":
+        webpageDFS("https://en.wikipedia.org/wiki/Linear_algebra", Host.WP, localWebDir)
+    elif siteCode == "SOF":
+        webpageDFS("https://stackoverflow.com/questions/45380417/optimizing-a-webcrawl", Host.SOF, localWebDir)
+    elif siteCode == "MW":
+        webpageDFS("https://www.merriam-webster.com/dictionary/web%20crawler", Host.MW, localWebDir)
+    
